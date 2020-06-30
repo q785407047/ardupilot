@@ -27,7 +27,7 @@ extern const AP_HAL::HAL& hal;
 
 
 //constructor
-AP_OpenMV::AP_OpenMV()
+AP_OpenMV::AP_OpenMV(void)
 {
     _port = NULL;
     _step = 0;
@@ -69,6 +69,9 @@ bool AP_OpenMV::update(void)
         case 1:
             if(data == 0x5A)
                 _step = 2;
+            else
+                _step = 0;
+            break;
         case 2:
             _cx_temp = data;
             _step = 3;

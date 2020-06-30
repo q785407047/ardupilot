@@ -316,7 +316,43 @@ void Copter::update_batt_compass(void)
 
 void Copter::update_OpenMV(void)
 {
-    openmv.update();
+
+//    openmv.update();
+    static uint32_t last_set_pos_target_time_ms = 0;
+    Vector3f target = Vector3f(0, 0, 0);
+    if(copter.openmv.update())
+    {
+        //Log_Write_OpenMV();
+        if(control_mode != GUIDED)
+            return;
+
+        int16_t target_body_frame_y = (int16_t)copter.openmv.cx - 80;  // QQVGA 160 * 120
+        int16_t target_body_frame_z = (int16_t)copter.openmv.cy - 60;
+
+        float angle_y_deg = target_body_frame_y * 60.0f / 160.0f;
+        float angle_z_deg = target_body_frame_z * 60.0f / 120.0f;
+
+        Vector3f v = Vector3f(1.0f, tanf(radians(angle_y_deg)), tanf(radians(angle_z_deg)));
+        v = v / v.length();
+
+        const Matrix3f &rotMat = copter.ahrs.get_rotation_body_to_ned();
+        v = rotMat *v;
+
+        target = v * 1000.0f;  // distance 10m
+
+        target.z = -target.z;  // ned to neu
+
+        Vector3f current_pos = inertial_nav.get_position();
+        target = target + current_pos;
+
+        if(millis() - last_set_pos_target_time_ms > 500)
+        {  // call in 2Hz
+            // wp_nav->set_wp_destination(target, false);
+            mode_guided.set_destination(target, false, 0, true, 0, false);
+            last_set_pos_target_time_ms= millis();
+        }
+
+    }
 }
 
 // Full rate logging of attitude, rate and pid loops
@@ -459,9 +495,13 @@ void Copter::one_hz_loop()
     update_sensor_status_flags();
     gcs().send_text(MAV_SEVERITY_CRITICAL,
             "OpenMV X:%d Y:%d Frame:%d ms",
-            openmv.cx,
-            openmv.cy,
-            openmv.last_frame_ms);
+            copter.openmv.cx,
+            copter.openmv.cy,
+            copter.openmv.update());
+
+//    gcs().send_text(MAV_SEVERITY_CRITICAL,
+//                    "Current altitude: %.1fm",
+//                    copter.flightmode->get_alt_above_ground()/100.0f);
 //    gcs().send_text(MAV_SEVERITY_CRITICAL,
 //                "Frame:%d ms",
 //                openmv.last_frame_ms);
